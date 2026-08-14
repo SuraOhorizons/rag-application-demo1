@@ -1,0 +1,68 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: "rag-application-demo1"
+  description: "Prueba exploratoria del golden path RAG Application (H3) — evaluar la infraestructura y el pipeline generados antes de definir el caso de uso final."
+  annotations:
+    github.com/project-slug: suraOhorizons/rag-application-demo1
+    backstage.io/techdocs-ref: dir:.
+    argocd/app-name: rag-application-demo1
+  tags:
+    - rag
+    - ai
+    - openai
+    - h3-innovation
+  links:
+    - url: https://github.com/suraOhorizons/rag-application-demo1
+      title: GitHub Repository
+      icon: github
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/platform-engineering
+  system: default
+  dependsOn:
+    - resource:azure-openai
+    - resource:azure-ai-search
+    - resource:azure-blob-storage
+  providesApis:
+    - rag-application-demo1-api
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: rag-application-demo1-api
+  description: RAG API for rag-application-demo1
+spec:
+  type: openapi
+  lifecycle: production
+  owner: group:default/platform-engineering
+  definition: |
+    openapi: 3.0.0
+    info:
+      title: rag-application-demo1 RAG API
+      version: 1.0.0
+    paths:
+      /chat:
+        post:
+          summary: Chat with RAG system
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    query:
+                      type: string
+                    conversation_id:
+                      type: string
+          responses:
+            '200':
+              description: Chat response
+      /documents:
+        post:
+          summary: Upload documents for indexing
+          responses:
+            '202':
+              description: Documents accepted for processing

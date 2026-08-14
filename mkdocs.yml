@@ -1,0 +1,12 @@
+site_name: rag-application-demo1
+site_description: Prueba exploratoria del golden path RAG Application (H3) — evaluar la infraestructura y el pipeline generados antes de definir el caso de uso final.
+
+theme:
+  name: material
+
+plugins:
+  - search
+  - techdocs-core
+
+nav:
+  - Home: index.md

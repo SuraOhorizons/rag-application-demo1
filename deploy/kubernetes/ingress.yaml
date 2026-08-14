@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: 
+  labels:
+    app.kubernetes.io/name: 
+    app.kubernetes.io/managed-by: backstage
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api/undefined
+            pathType: Prefix
+            backend:
+              service:
+                name: 
+                port:
+                  name: http

@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: 
+  labels:
+    app.kubernetes.io/name: 
+    app.kubernetes.io/managed-by: backstage
+    app.kubernetes.io/part-of: open-horizons
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: 
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: 
+    spec:
+      containers:
+        - name: 
+          image: app-image:v0.1.0
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
