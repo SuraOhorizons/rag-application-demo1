@@ -1,18 +1,125 @@
-name: Python CI
+name: Deploy RAG Backend
+
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches:
+      - main
+      - develop
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  ACR_NAME: crsuradev
+  REGISTRY: crsuradev.azurecr.io
+  IMAGE_NAME: rag-application-demo1
+  IMAGE_TAG: v0.1.0
+
+  AZURE_TENANT_ID: 9dbc76ea-fb25-4b07-8f07-5dc315999b76
+  AZURE_SUBSCRIPTION_ID: f0550323-fb0b-44d4-8a39-ecf0f6c2dbc9
+
 jobs:
-  build:
+  build-and-push:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: pytest --tb=short
-      - name: Lint
-        run: pip install ruff && ruff check .
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure CLI Login
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          echo "===== AZURE LOGIN ====="
+
+          az login \
+            --service-principal \
+            --username "$AZURE_CLIENT_ID" \
+            --password "$AZURE_CLIENT_SECRET" \
+            --tenant "$AZURE_TENANT_ID"
+
+          az account set \
+            --subscription "$AZURE_SUBSCRIPTION_ID"
+
+          echo "===== AZURE ACCOUNT ====="
+
+          az account show \
+            --query "{subscription:id,tenantId:tenantId,user:user.name}" \
+            --output table
+
+      - name: Azure Container Registry Login
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          echo "===== ACR ====="
+
+          az acr show \
+            --name "$ACR_NAME" \
+            --query "{name:name,loginServer:loginServer}" \
+            --output table
+
+          echo "===== DOCKER LOGIN ====="
+
+          echo "$AZURE_CLIENT_SECRET" | \
+            docker login "$REGISTRY" \
+              --username "$AZURE_CLIENT_ID" \
+              --password-stdin
+
+      - name: Build Docker Image
+        shell: bash
+        run: |
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "===== BUILDING IMAGE ====="
+          echo "Image: $FULL_IMAGE"
+
+          docker build \
+            --tag "$FULL_IMAGE" \
+            .
+
+      - name: Push Docker Image
+        shell: bash
+        run: |
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "===== PUSHING IMAGE ====="
+          echo "Image: $FULL_IMAGE"
+
+          docker push "$FULL_IMAGE"
+
+      - name: Verify Image
+        shell: bash
+        run: |
+          echo "===== VERIFYING IMAGE ====="
+
+          az acr repository show-tags \
+            --name "$ACR_NAME" \
+            --repository "$IMAGE_NAME" \
+            --output table
+
+          echo "===== VERIFYING ${IMAGE_TAG} ====="
+
+          if az acr repository show-tags \
+              --name "$ACR_NAME" \
+              --repository "$IMAGE_NAME" \
+              --output tsv |
+              grep -Fx "$IMAGE_TAG"; then
+
+            echo "======================================"
+            echo "IMAGE VERIFIED"
+            echo "IMAGE: ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "======================================"
+
+          else
+
+            echo "ERROR: Tag $IMAGE_TAG was not found in ACR."
+            exit 1
+
+          fi
