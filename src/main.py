@@ -152,16 +152,17 @@ async def metrics():
     response_model=ChatResponse,
 )
 async def chat(request: ChatRequest):
-    """Chat endpoint reserved for Phase 2."""
+    """Chat endpoint for frontend/RAG connectivity testing."""
 
     CHAT_REQUESTS.inc()
 
-    with CHAT_LATENCY.time():
-        raise HTTPException(
-            status_code=503,
-            detail="Chat service is not configured yet",
-        )
+    conversation_id = request.conversation_id or str(uuid.uuid4())
 
+    return ChatResponse(
+        answer="RAG backend connected successfully.",
+        sources=[],
+        conversation_id=conversation_id,
+    )
 
 @app.post("/documents")
 async def upload_document(
