@@ -20,7 +20,6 @@ from pydantic import BaseModel
 from starlette.responses import Response
 
 from .config import settings
-from .rag import RAGService
 
 
 logging.basicConfig(
