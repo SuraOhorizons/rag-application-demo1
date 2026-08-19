@@ -7,18 +7,18 @@ python-multipart>=0.0.27
 azure-identity>=1.19.0
 azure-storage-blob==12.19.0
 azure-search-documents==11.4.0
-openai==1.12.0
+openai==1.58.1
 
 # LangChain
-langchain==0.3.21
-langchain-openai>=0.2.14
-langchain-community>=0.3.27
+langchain==0.3.27
+langchain-openai==0.3.14
+langchain-community==0.3.27
 
 # Document processing
 pypdf>=6.10.2
 python-docx==1.1.0
 beautifulsoup4==4.12.3
-tiktoken==0.5.2
+tiktoken==0.7.0
 
 # Observability
 prometheus-client==0.19.0
@@ -27,12 +27,12 @@ opentelemetry-sdk==1.22.0
 opentelemetry-instrumentation-fastapi==0.43b0
 
 # Utilities
-pydantic==2.6.0
+pydantic>=2.7.4,<3.0.0
 pydantic-settings==2.1.0
 python-dotenv>=1.2.2
 tenacity==8.2.3
 
 # Testing
-pytest>=9.0.3
+pytest==7.4.4
 pytest-asyncio==0.23.4
 httpx==0.26.0
