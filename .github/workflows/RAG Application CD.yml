@@ -1,11 +1,7 @@
 name: CD - Deploy RAG Backend
 
 on:
-  workflow_run:
-    workflows:
-      - Python CI
-    types:
-      - completed
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,21 +22,15 @@ jobs:
     name: Build and Deploy
     runs-on: ubuntu-latest
 
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
-
     steps:
       # ============================================================
       # CHECKOUT
       # ============================================================
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       # ============================================================
-      # AZURE AUTHENTICATION - OIDC
+      # AZURE LOGIN - OIDC
       # ============================================================
       - name: Azure Login
         uses: azure/login@v2
@@ -61,7 +51,7 @@ jobs:
             --name "$ACR_NAME"
 
       # ============================================================
-      # DOCKER BUILD
+      # BUILD IMAGE
       # ============================================================
       - name: Build Docker image
         run: |
@@ -75,7 +65,7 @@ jobs:
             .
 
       # ============================================================
-      # DOCKER PUSH
+      # PUSH IMAGE
       # ============================================================
       - name: Push Docker image
         run: |
@@ -87,7 +77,19 @@ jobs:
           docker push "${FULL_IMAGE}"
 
       # ============================================================
-      # AKS CREDENTIALS
+      # VERIFY IMAGE
+      # ============================================================
+      - name: Verify image in ACR
+        run: |
+          echo "===== VERIFYING IMAGE ====="
+
+          az acr repository show \
+            --name "$ACR_NAME" \
+            --image "${IMAGE_NAME}:${IMAGE_TAG}" \
+            --output table
+
+      # ============================================================
+      # GET AKS CREDENTIALS
       # ============================================================
       - name: Get AKS credentials
         run: |
@@ -114,7 +116,7 @@ jobs:
           kubectl get nodes
 
       # ============================================================
-      # DEPLOY KUBERNETES RESOURCES
+      # DEPLOY KUBERNETES
       # ============================================================
       - name: Deploy with Kustomize
         run: |
@@ -127,7 +129,7 @@ jobs:
       # ============================================================
       # UPDATE IMAGE
       # ============================================================
-      - name: Update image
+      - name: Update deployment image
         run: |
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
@@ -140,7 +142,7 @@ jobs:
             -n "$AKS_NAMESPACE"
 
       # ============================================================
-      # ROLLOUT
+      # WAIT FOR ROLLOUT
       # ============================================================
       - name: Wait for rollout
         run: |
@@ -181,8 +183,14 @@ jobs:
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
 
+          echo "===== INGRESS ====="
+
+          kubectl get ingress \
+            rag-application-demo1 \
+            -n "$AKS_NAMESPACE"
+
       # ============================================================
-      # BACKEND HEALTH CHECK
+      # VERIFY POD HEALTH
       # ============================================================
       - name: Health check
         run: |
@@ -199,3 +207,36 @@ jobs:
             "$POD" \
             -- python -c \
             "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
+
+      # ============================================================
+      # VERIFY READINESS
+      # ============================================================
+      - name: Readiness check
+        run: |
+          POD=$(kubectl get pods \
+            -n "$AKS_NAMESPACE" \
+            -l app.kubernetes.io/name=rag-application-demo1 \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          echo "===== READINESS CHECK ====="
+          echo "Testing pod: ${POD}"
+
+          kubectl exec \
+            -n "$AKS_NAMESPACE" \
+            "$POD" \
+            -- python -c \
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
+
+      # ============================================================
+      # FINAL STATUS
+      # ============================================================
+      - name: Deployment summary
+        run: |
+          echo "======================================"
+          echo "RAG BACKEND DEPLOYMENT COMPLETE"
+          echo "======================================"
+          echo "Application : ${IMAGE_NAME}"
+          echo "Image       : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "AKS Cluster : ${AKS_CLUSTER}"
+          echo "Namespace   : ${AKS_NAMESPACE}"
+          echo "======================================"
