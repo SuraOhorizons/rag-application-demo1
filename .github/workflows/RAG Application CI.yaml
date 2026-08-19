@@ -35,3 +35,7 @@ jobs:
         run: |
           pytest --tb=short
 
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check .
