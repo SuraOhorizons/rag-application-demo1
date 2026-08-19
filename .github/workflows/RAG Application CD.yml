@@ -1,0 +1,130 @@
+name: CD - Deploy RAG Backend
+
+on:
+  workflow_run:
+    workflows:
+      - Python CI
+    types:
+      - completed
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  ACR_NAME: crsuradev
+  REGISTRY: crsuradev.azurecr.io
+  IMAGE_NAME: rag-application-demo1
+  IMAGE_TAG: v0.1.0
+
+  AKS_CLUSTER: aks-sura-dev
+  AKS_RESOURCE_GROUP: RG-PRY-SURA-PLF-ENGINEERING
+  AKS_NAMESPACE: default
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login --name "$ACR_NAME"
+
+      - name: Build Docker image
+        run: |
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "===== BUILDING IMAGE ====="
+          echo "Image: ${FULL_IMAGE}"
+
+          docker build \
+            -t "${FULL_IMAGE}" \
+            .
+
+      - name: Push Docker image
+        run: |
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "===== PUSHING IMAGE ====="
+          echo "Image: ${FULL_IMAGE}"
+
+          docker push "${FULL_IMAGE}"
+
+      - name: Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group "$AKS_RESOURCE_GROUP" \
+            --name "$AKS_CLUSTER" \
+            --overwrite-existing
+
+      - name: Verify AKS context
+        run: |
+          kubectl config current-context
+          kubectl get nodes
+
+      - name: Deploy with Kustomize
+        run: |
+          kubectl apply \
+            -k deploy/kubernetes \
+            -n "$AKS_NAMESPACE"
+
+      - name: Update image
+        run: |
+          kubectl set image \
+            deployment/rag-application-demo1 \
+            rag-application-demo1="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}" \
+            -n "$AKS_NAMESPACE"
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status \
+            deployment/rag-application-demo1 \
+            -n "$AKS_NAMESPACE" \
+            --timeout=180s
+
+      - name: Verify deployment
+        run: |
+          echo "===== DEPLOYMENT ====="
+          kubectl get deployment \
+            rag-application-demo1 \
+            -n "$AKS_NAMESPACE"
+
+          echo "===== PODS ====="
+          kubectl get pods \
+            -n "$AKS_NAMESPACE" \
+            -l app.kubernetes.io/name=rag-application-demo1
+
+          echo "===== SERVICE ====="
+          kubectl get service \
+            rag-application-demo1 \
+            -n "$AKS_NAMESPACE"
+
+      - name: Health check
+        run: |
+          POD=$(kubectl get pods \
+            -n "$AKS_NAMESPACE" \
+            -l app.kubernetes.io/name=rag-application-demo1 \
+            -o jsonpath='{.items[0].metadata.name}')
+
+          echo "Testing pod: ${POD}"
+
+          kubectl exec \
+            -n "$AKS_NAMESPACE" \
+            "$POD" \
+            -- python -c \
+            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
