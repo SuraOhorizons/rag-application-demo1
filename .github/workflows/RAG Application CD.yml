@@ -26,14 +26,22 @@ jobs:
     name: Build and Deploy
     runs-on: ubuntu-latest
 
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
 
     steps:
+      # ============================================================
+      # CHECKOUT
+      # ============================================================
       - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      # ============================================================
+      # AZURE AUTHENTICATION - OIDC
+      # ============================================================
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -41,10 +49,20 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      # ============================================================
+      # ACR LOGIN
+      # ============================================================
       - name: Login to Azure Container Registry
         run: |
-          az acr login --name "$ACR_NAME"
+          echo "===== ACR LOGIN ====="
+          echo "Registry: ${REGISTRY}"
 
+          az acr login \
+            --name "$ACR_NAME"
+
+      # ============================================================
+      # DOCKER BUILD
+      # ============================================================
       - name: Build Docker image
         run: |
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -56,6 +74,9 @@ jobs:
             -t "${FULL_IMAGE}" \
             .
 
+      # ============================================================
+      # DOCKER PUSH
+      # ============================================================
       - name: Push Docker image
         run: |
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -65,55 +86,104 @@ jobs:
 
           docker push "${FULL_IMAGE}"
 
+      # ============================================================
+      # AKS CREDENTIALS
+      # ============================================================
       - name: Get AKS credentials
         run: |
+          echo "===== GETTING AKS CREDENTIALS ====="
+          echo "Cluster: ${AKS_CLUSTER}"
+          echo "Resource Group: ${AKS_RESOURCE_GROUP}"
+
           az aks get-credentials \
             --resource-group "$AKS_RESOURCE_GROUP" \
             --name "$AKS_CLUSTER" \
             --overwrite-existing
 
+      # ============================================================
+      # VERIFY AKS CONNECTION
+      # ============================================================
       - name: Verify AKS context
         run: |
+          echo "===== AKS CONTEXT ====="
+
           kubectl config current-context
+
+          echo "===== AKS NODES ====="
+
           kubectl get nodes
 
+      # ============================================================
+      # DEPLOY KUBERNETES RESOURCES
+      # ============================================================
       - name: Deploy with Kustomize
         run: |
+          echo "===== DEPLOYING KUBERNETES RESOURCES ====="
+
           kubectl apply \
             -k deploy/kubernetes \
             -n "$AKS_NAMESPACE"
 
+      # ============================================================
+      # UPDATE IMAGE
+      # ============================================================
       - name: Update image
         run: |
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+
+          echo "===== UPDATING DEPLOYMENT IMAGE ====="
+          echo "Image: ${FULL_IMAGE}"
+
           kubectl set image \
             deployment/rag-application-demo1 \
-            rag-application-demo1="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}" \
+            rag-application-demo1="${FULL_IMAGE}" \
             -n "$AKS_NAMESPACE"
 
+      # ============================================================
+      # ROLLOUT
+      # ============================================================
       - name: Wait for rollout
         run: |
+          echo "===== WAITING FOR ROLLOUT ====="
+
           kubectl rollout status \
             deployment/rag-application-demo1 \
             -n "$AKS_NAMESPACE" \
             --timeout=180s
 
+      # ============================================================
+      # VERIFY DEPLOYMENT
+      # ============================================================
       - name: Verify deployment
         run: |
           echo "===== DEPLOYMENT ====="
+
           kubectl get deployment \
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
 
           echo "===== PODS ====="
+
           kubectl get pods \
             -n "$AKS_NAMESPACE" \
-            -l app.kubernetes.io/name=rag-application-demo1
+            -l app.kubernetes.io/name=rag-application-demo1 \
+            -o wide
 
           echo "===== SERVICE ====="
+
           kubectl get service \
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
 
+          echo "===== HPA ====="
+
+          kubectl get hpa \
+            rag-application-demo1 \
+            -n "$AKS_NAMESPACE"
+
+      # ============================================================
+      # BACKEND HEALTH CHECK
+      # ============================================================
       - name: Health check
         run: |
           POD=$(kubectl get pods \
@@ -121,6 +191,7 @@ jobs:
             -l app.kubernetes.io/name=rag-application-demo1 \
             -o jsonpath='{.items[0].metadata.name}')
 
+          echo "===== HEALTH CHECK ====="
           echo "Testing pod: ${POD}"
 
           kubectl exec \
