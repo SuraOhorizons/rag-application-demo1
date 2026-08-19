@@ -5,7 +5,7 @@ Prueba exploratoria del golden path RAG Application (H3) — evaluar la infraest
 ## Overview
 
 This RAG (Retrieval-Augmented Generation) application was created using the Open Horizons Platform - H3 Innovation template.
-
+|||||
 | Property | Value |
 |----------|-------|
 | Owner | group:default/platform-engineering |
