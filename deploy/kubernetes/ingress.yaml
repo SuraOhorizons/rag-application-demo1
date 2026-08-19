@@ -1,21 +1,27 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
+
 metadata:
-  name: 
+  name: rag-application-demo1
+  namespace: default
   labels:
-    app.kubernetes.io/name: 
+    app.kubernetes.io/name: rag-application-demo1
     app.kubernetes.io/managed-by: backstage
+    app.kubernetes.io/part-of: open-horizons
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+
 spec:
   ingressClassName: nginx
+
   rules:
     - http:
         paths:
-          - path: /api/undefined
-            pathType: Prefix
+          - path: /api/rag-application-demo1(/|$)(.*)
+            pathType: ImplementationSpecific
             backend:
               service:
-                name: 
+                name: rag-application-demo1
                 port:
                   name: http

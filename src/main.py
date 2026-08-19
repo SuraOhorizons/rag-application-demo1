@@ -1,61 +1,88 @@
 """
 rag-application-demo1 - RAG Application
 
-A Retrieval-Augmented Generation application built with FastAPI,
-Azure OpenAI, and Azure AI Search.
+FastAPI backend base for the RAG application.
+
+Phase 1:
+- Run the backend without AI dependencies.
+- Health, readiness and metrics endpoints are available.
+- Chat and document endpoints return HTTP 503 until Phase 2.
 """
+
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Histogram,
+    generate_latest,
+)
 from pydantic import BaseModel
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
-from .config import settings
-from .rag import RAGService
 
-# Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 logger = logging.getLogger(__name__)
 
-# Metrics
-CHAT_REQUESTS = Counter('rag_chat_requests_total', 'Total chat requests')
-CHAT_LATENCY = Histogram('rag_chat_latency_seconds', 'Chat request latency')
-DOCUMENTS_INDEXED = Counter('rag_documents_indexed_total', 'Total documents indexed')
 
-# RAG service instance
-rag_service: Optional[RAGService] = None
+CHAT_REQUESTS = Counter(
+    "rag_chat_requests_total",
+    "Total chat requests",
+)
+
+CHAT_LATENCY = Histogram(
+    "rag_chat_latency_seconds",
+    "Chat request latency",
+)
+
+DOCUMENTS_INDEXED = Counter(
+    "rag_documents_indexed_total",
+    "Total documents indexed",
+)
+
+
+# Phase 1:
+# RAGService is intentionally not imported or initialized.
+rag_service = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
-    global rag_service
-    logger.info("Initializing RAG service...")
-    rag_service = RAGService(
-        openai_endpoint=settings.azure_openai_endpoint,
-        openai_key=settings.azure_openai_api_key,
-        openai_deployment=settings.azure_openai_deployment,
-        search_endpoint=settings.azure_search_endpoint,
-        search_key=settings.azure_search_api_key,
-        search_index=settings.azure_search_index,
+
+    logger.info(
+        "Starting rag-application-demo1 in backend-only mode"
     )
-    logger.info("RAG service initialized successfully")
+
+    logger.info(
+        "RAG service is disabled until Phase 2"
+    )
+
     yield
-    logger.info("Shutting down RAG service...")
+
+    logger.info(
+        "Shutting down application"
+    )
 
 
 app = FastAPI(
     title="rag-application-demo1",
-    description="Prueba exploratoria del golden path RAG Application (H3) — evaluar la infraestructura y el pipeline generados antes de definir el caso de uso final.",
+    description=(
+        "Backend base for the RAG Application. "
+        "Phase 1 runs without Azure OpenAI or Azure AI Search."
+    ),
     version="1.0.0",
     lifespan=lifespan,
 )
 
-# CORS
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -65,88 +92,96 @@ app.add_middleware(
 )
 
 
-# Models
 class ChatRequest(BaseModel):
+    """Chat request model."""
+
     query: str
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
 
 
 class ChatResponse(BaseModel):
+    """Chat response model."""
+
     answer: str
     sources: list[dict]
     conversation_id: str
 
 
 class HealthResponse(BaseModel):
+    """Health response model."""
+
     status: str
     version: str
 
 
-# Endpoints
-@app.get("/health", response_model=HealthResponse)
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+)
 async def health():
     """Health check endpoint."""
-    return HealthResponse(status="healthy", version="1.0.0")
+
+    return HealthResponse(
+        status="healthy",
+        version="1.0.0",
+    )
 
 
 @app.get("/ready")
 async def ready():
     """Readiness check endpoint."""
-    if rag_service is None:
-        raise HTTPException(status_code=503, detail="Service not ready")
-    return {"status": "ready"}
+
+    return {
+        "status": "ready",
+        "rag_enabled": False,
+    }
 
 
 @app.get("/metrics")
 async def metrics():
     """Prometheus metrics endpoint."""
-    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST,
+    )
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post(
+    "/chat",
+    response_model=ChatResponse,
+)
 async def chat(request: ChatRequest):
-    """Process a chat request using RAG."""
+    """Chat endpoint reserved for Phase 2."""
+
     CHAT_REQUESTS.inc()
 
     with CHAT_LATENCY.time():
-        try:
-            result = await rag_service.chat(
-                query=request.query,
-                conversation_id=request.conversation_id,
-            )
-            return ChatResponse(
-                answer=result["answer"],
-                sources=result["sources"],
-                conversation_id=result["conversation_id"],
-            )
-        except Exception as e:
-            logger.error(f"Chat error: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail="Chat service is not configured yet",
+        )
 
 
 @app.post("/documents")
-async def upload_document(file: UploadFile = File(...)):
-    """Upload and index a document."""
-    try:
-        content = await file.read()
-        await rag_service.index_document(
-            filename=file.filename,
-            content=content,
-            content_type=file.content_type,
-        )
-        DOCUMENTS_INDEXED.inc()
-        return {"status": "accepted", "filename": file.filename}
-    except Exception as e:
-        logger.error(f"Document upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+async def upload_document(
+    file: UploadFile = File(...),
+):
+    """Document ingestion endpoint reserved for Phase 2."""
+
+    DOCUMENTS_INDEXED.inc()
+
+    raise HTTPException(
+        status_code=503,
+        detail="Document service is not configured yet",
+    )
 
 
 @app.get("/documents")
 async def list_documents():
-    """List indexed documents."""
-    try:
-        documents = await rag_service.list_documents()
-        return {"documents": documents}
-    except Exception as e:
-        logger.error(f"List documents error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Document listing endpoint reserved for Phase 2."""
+
+    raise HTTPException(
+        status_code=503,
+        detail="Document service is not configured yet",
+    )
