@@ -8,7 +8,7 @@ Phase 1:
 - Health, readiness and metrics endpoints are available.
 - Chat and document endpoints return HTTP 503 until Phase 2.
 """
-
+import uuid
 import logging
 from contextlib import asynccontextmanager
 
