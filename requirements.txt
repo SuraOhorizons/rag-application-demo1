@@ -27,7 +27,7 @@ opentelemetry-sdk==1.22.0
 opentelemetry-instrumentation-fastapi==0.43b0
 
 # Utilities
-pydantic==2.6.0
+pydantic>=2.7.4,<3.0.0
 pydantic-settings==2.1.0
 python-dotenv>=1.2.2
 tenacity==8.2.3
