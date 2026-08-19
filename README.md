@@ -26,7 +26,7 @@ This RAG (Retrieval-Augmented Generation) application was created using the Open
 - Source citations
 - Content safety filtering
 
-## Getting Started
+### Getting Started
 
 ### Prerequisites
 
