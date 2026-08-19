@@ -128,9 +128,11 @@ jobs:
           az aks install-cli
 
           echo "===== KUBECTL VERSION ====="
+
           kubectl version --client
 
           echo "===== KUBELOGIN VERSION ====="
+
           kubelogin --version
 
       # ============================================================
@@ -150,7 +152,7 @@ jobs:
             --overwrite-existing
 
       # ============================================================
-      # CONVERT KUBECONFIG TO AZURE CLI AUTH
+      # CONFIGURE KUBELOGIN
       # ============================================================
       - name: Configure kubelogin
         shell: bash
@@ -172,9 +174,14 @@ jobs:
 
           kubectl config current-context
 
-          echo "===== AKS NODES ====="
+          echo "===== AKS NAMESPACE ====="
 
-          kubectl get nodes
+          kubectl get namespace "$AKS_NAMESPACE"
+
+          echo "===== CURRENT WORKLOADS ====="
+
+          kubectl get pods \
+            -n "$AKS_NAMESPACE"
 
       # ============================================================
       # DEPLOY KUBERNETES
