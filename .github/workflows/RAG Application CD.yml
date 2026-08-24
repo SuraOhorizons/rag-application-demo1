@@ -11,7 +11,7 @@ env:
   ACR_NAME: crsuradev
   REGISTRY: crsuradev.azurecr.io
   IMAGE_NAME: rag-application-demo1
-  IMAGE_TAG: v0.1.0
+  IMAGE_TAG: v0.1.3
 
   AKS_CLUSTER: aks-sura-dev
   AKS_RESOURCE_GROUP: RG-PRY-SURA-PLF-ENGINEERING
