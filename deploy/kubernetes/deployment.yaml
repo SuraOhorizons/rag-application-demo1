@@ -20,8 +20,11 @@ spec:
     metadata:
       labels:
         app.kubernetes.io/name: rag-application-demo1
+        azure.workload.identity/use: "true"
 
     spec:
+      serviceAccountName: rag-application-demo1
+
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -32,6 +35,16 @@ spec:
 
           image: crsuradev.azurecr.io/rag-application-demo1:v0.2.0
           imagePullPolicy: IfNotPresent
+
+          env:
+            - name: AZURE_OPENAI_ENDPOINT
+              value: "https://ohorizons-agent-test-1787338856.openai.azure.com/"
+
+            - name: AZURE_OPENAI_DEPLOYMENT
+              value: "agent-chat"
+
+            - name: AZURE_CLIENT_ID
+              value: "152af30a-97c0-4d78-8ab5-1e11c68bbb05"
 
           ports:
             - containerPort: 8000
