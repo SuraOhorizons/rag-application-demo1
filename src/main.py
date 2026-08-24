@@ -22,6 +22,9 @@ from prometheus_client import (
 )
 from pydantic import BaseModel
 from starlette.responses import Response
+from azure.identity import DefaultAzureCredential
+from openai import AzureOpenAI
+import os
 
 
 logging.basicConfig(
@@ -48,9 +51,17 @@ DOCUMENTS_INDEXED = Counter(
 )
 
 
-# Phase 1:
-# RAGService is intentionally not imported or initialized.
-rag_service = None
+credential = DefaultAzureCredential()
+
+openai_client = AzureOpenAI(
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    api_version="2024-10-21",
+    azure_ad_token_provider=lambda: credential.get_token(
+        "https://cognitiveservices.azure.com/.default"
+    ).token,
+)
+
+OPENAI_DEPLOYMENT = os.environ["AZURE_OPENAI_DEPLOYMENT"]
 
 
 @asynccontextmanager
@@ -152,16 +163,37 @@ async def metrics():
     response_model=ChatResponse,
 )
 async def chat(request: ChatRequest):
-    """Chat endpoint reserved for Phase 2."""
+    """Chat endpoint."""
 
     CHAT_REQUESTS.inc()
 
     with CHAT_LATENCY.time():
-        raise HTTPException(
-            status_code=503,
-            detail="Chat service is not configured yet",
-        )
+        conversation_id = request.conversation_id or str(uuid.uuid4())
 
+        try:
+            response = openai_client.chat.completions.create(
+                model=OPENAI_DEPLOYMENT,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": request.query,
+                    },
+                ],
+                max_completion_tokens=1000,
+            )
+
+            return ChatResponse(
+                answer=response.choices[0].message.content or "",
+                sources=[],
+                conversation_id=conversation_id,
+            )
+
+        except Exception as exc:
+            logger.exception("Azure OpenAI request failed")
+            raise HTTPException(
+                status_code=502,
+                detail=f"Azure OpenAI error: {exc}",
+            )
 
 @app.post("/documents")
 async def upload_document(
