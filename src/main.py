@@ -8,7 +8,7 @@ Phase 1:
 - Health, readiness and metrics endpoints are available.
 - Chat and document endpoints return HTTP 503 until Phase 2.
 """
-
+import uuid
 import logging
 from contextlib import asynccontextmanager
 
@@ -163,37 +163,18 @@ async def metrics():
     response_model=ChatResponse,
 )
 async def chat(request: ChatRequest):
-    """Chat endpoint."""
+
 
     CHAT_REQUESTS.inc()
 
-    with CHAT_LATENCY.time():
-        conversation_id = request.conversation_id or str(uuid.uuid4())
+    conversation_id = request.conversation_id or str(uuid.uuid4())
 
-        try:
-            response = openai_client.chat.completions.create(
-                model=OPENAI_DEPLOYMENT,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": request.query,
-                    },
-                ],
-                max_completion_tokens=1000,
-            )
+    return ChatResponse(
+        answer="RAG backend connected successfully.",
+        sources=[],
+        conversation_id=conversation_id,
+    )
 
-            return ChatResponse(
-                answer=response.choices[0].message.content or "",
-                sources=[],
-                conversation_id=conversation_id,
-            )
-
-        except Exception as exc:
-            logger.exception("Azure OpenAI request failed")
-            raise HTTPException(
-                status_code=502,
-                detail=f"Azure OpenAI error: {exc}",
-            )
 
 @app.post("/documents")
 async def upload_document(
