@@ -4,6 +4,9 @@ param appName string = 'rag-application-demo1'
 @description('Azure location for RAG infrastructure.')
 param location string = resourceGroup().location
 
+@description('Azure AI Search location.')
+param searchLocation string = 'eastus'
+
 @description('Azure AI Search SKU.')
 @allowed([
   'basic'
@@ -49,7 +52,7 @@ resource documentsContainer 'Microsoft.Storage/storageAccounts/blobServices/cont
 
 resource search 'Microsoft.Search/searchServices@2023-11-01' = {
   name: searchName
-  location: location
+  location: searchLocation
   tags: tags
   sku: {
     name: searchSku
