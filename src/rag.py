@@ -216,7 +216,6 @@ class RAGService:
         response = self.openai_client.chat.completions.create(
             model=self.openai_deployment,
             messages=messages,
-            temperature=0.7,
             max_completion_tokens=1000,
         )
 
