@@ -3,6 +3,9 @@ kind: Kustomization
 
 resources:
   - deployment.yaml
+  - serviceaccount.yaml
+  - rag-reader-rolebinding.yaml
+  - rag-reader-role.yaml
   - service.yaml
   - ingress.yaml
   - hpa.yaml

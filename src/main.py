@@ -8,7 +8,7 @@ Phase 1:
 - Health, readiness and metrics endpoints are available.
 - Chat and document endpoints return HTTP 503 until Phase 2.
 """
-import uuid
+
 import logging
 from contextlib import asynccontextmanager
 
@@ -16,12 +16,14 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
-    Counter,
-    Histogram,
     generate_latest,
 )
 from pydantic import BaseModel
 from starlette.responses import Response
+from azure.identity import DefaultAzureCredential
+from openai import AzureOpenAI
+from src.rag import RAGService
+import os
 
 
 logging.basicConfig(
@@ -32,25 +34,32 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-CHAT_REQUESTS = Counter(
-    "rag_chat_requests_total",
-    "Total chat requests",
+credential = DefaultAzureCredential()
+
+openai_client = AzureOpenAI(
+    azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    api_version="2024-10-21",
+    azure_ad_token_provider=lambda: credential.get_token(
+        "https://cognitiveservices.azure.com/.default"
+    ).token,
 )
 
-CHAT_LATENCY = Histogram(
-    "rag_chat_latency_seconds",
-    "Chat request latency",
+OPENAI_DEPLOYMENT = os.environ["AZURE_OPENAI_DEPLOYMENT"]
+
+SEARCH_ENDPOINT = os.environ["AZURE_SEARCH_ENDPOINT"]
+SEARCH_INDEX = os.environ.get(
+    "AZURE_SEARCH_INDEX",
+    "documents",
 )
 
-DOCUMENTS_INDEXED = Counter(
-    "rag_documents_indexed_total",
-    "Total documents indexed",
+rag_service = RAGService(
+    openai_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    openai_key="",
+    openai_deployment=OPENAI_DEPLOYMENT,
+    search_endpoint=SEARCH_ENDPOINT,
+    search_key="",
+    search_index=SEARCH_INDEX,
 )
-
-
-# Phase 1:
-# RAGService is intentionally not imported or initialized.
-rag_service = None
 
 
 @asynccontextmanager
@@ -152,25 +161,32 @@ async def metrics():
     response_model=ChatResponse,
 )
 async def chat(request: ChatRequest):
-    """Chat endpoint for frontend/RAG connectivity testing."""
+    """Chat endpoint."""
 
-    CHAT_REQUESTS.inc()
+    try:
+        result = await rag_service.chat(
+            query=request.query,
+            conversation_id=request.conversation_id,
+        )
 
-    conversation_id = request.conversation_id or str(uuid.uuid4())
+        return ChatResponse(
+            answer=result["answer"],
+            sources=result["sources"],
+            conversation_id=result["conversation_id"],
+        )
 
-    return ChatResponse(
-        answer="RAG backend connected successfully.",
-        sources=[],
-        conversation_id=conversation_id,
-    )
+    except Exception as exc:
+        logger.exception("Azure OpenAI request failed")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Azure OpenAI error: {exc}",
+        )
 
 @app.post("/documents")
 async def upload_document(
     file: UploadFile = File(...),
 ):
     """Document ingestion endpoint reserved for Phase 2."""
-
-    DOCUMENTS_INDEXED.inc()
 
     raise HTTPException(
         status_code=503,

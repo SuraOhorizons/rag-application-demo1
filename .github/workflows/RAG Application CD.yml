@@ -10,7 +10,7 @@ env:
   ACR_NAME: crsuradev
   REGISTRY: crsuradev.azurecr.io
   IMAGE_NAME: rag-application-demo1
-  IMAGE_TAG: v0.1.2
+  IMAGE_TAG: v0.3.15
 
   AZURE_TENANT_ID: 9dbc76ea-fb25-4b07-8f07-5dc315999b76
   AZURE_SUBSCRIPTION_ID: f0550323-fb0b-44d4-8a39-ecf0f6c2dbc9
@@ -43,22 +43,17 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
         run: |
           echo "===== AZURE LOGIN ====="
-
           az login \
             --service-principal \
             --username "$AZURE_CLIENT_ID" \
             --password "$AZURE_CLIENT_SECRET" \
             --tenant "$AZURE_TENANT_ID"
-
           az account set \
             --subscription "$AZURE_SUBSCRIPTION_ID"
-
           echo "===== AZURE ACCOUNT ====="
-
           az account show \
             --query "{subscription:id,tenantId:tenantId,user:user.name}" \
             --output table
-
       # ============================================================
       # ACR LOGIN
       # ============================================================
@@ -67,15 +62,12 @@ jobs:
         run: |
           echo "===== ACR LOGIN ====="
           echo "Registry: ${REGISTRY}"
-
           az acr show \
             --name "$ACR_NAME" \
             --query "{name:name,loginServer:loginServer}" \
             --output table
-
           az acr login \
             --name "$ACR_NAME"
-
       # ============================================================
       # BUILD IMAGE
       # ============================================================
@@ -83,14 +75,11 @@ jobs:
         shell: bash
         run: |
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-
           echo "===== BUILDING IMAGE ====="
           echo "Image: ${FULL_IMAGE}"
-
           docker build \
             --tag "$FULL_IMAGE" \
             .
-
       # ============================================================
       # PUSH IMAGE
       # ============================================================
@@ -98,12 +87,9 @@ jobs:
         shell: bash
         run: |
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-
           echo "===== PUSHING IMAGE ====="
           echo "Image: ${FULL_IMAGE}"
-
           docker push "$FULL_IMAGE"
-
       # ============================================================
       # VERIFY IMAGE
       # ============================================================
@@ -111,12 +97,10 @@ jobs:
         shell: bash
         run: |
           echo "===== VERIFYING IMAGE ====="
-
           az acr repository show \
             --name "$ACR_NAME" \
             --image "${IMAGE_NAME}:${IMAGE_TAG}" \
             --output table
-
       # ============================================================
       # INSTALL KUBECTL + KUBELOGIN
       # ============================================================
@@ -124,17 +108,11 @@ jobs:
         shell: bash
         run: |
           echo "===== INSTALLING AKS CLI TOOLS ====="
-
           az aks install-cli
-
           echo "===== KUBECTL VERSION ====="
-
           kubectl version --client
-
           echo "===== KUBELOGIN VERSION ====="
-
           kubelogin --version
-
       # ============================================================
       # GET AKS CREDENTIALS
       # ============================================================
@@ -142,15 +120,12 @@ jobs:
         shell: bash
         run: |
           echo "===== GETTING AKS CREDENTIALS ====="
-
           echo "Cluster: ${AKS_CLUSTER}"
           echo "Resource Group: ${AKS_RESOURCE_GROUP}"
-
           az aks get-credentials \
             --resource-group "$AKS_RESOURCE_GROUP" \
             --name "$AKS_CLUSTER" \
             --overwrite-existing
-
       # ============================================================
       # CONFIGURE KUBELOGIN
       # ============================================================
@@ -158,12 +133,9 @@ jobs:
         shell: bash
         run: |
           echo "===== CONFIGURING KUBELOGIN ====="
-
           kubelogin convert-kubeconfig \
             -l azurecli
-
           echo "===== KUBECONFIG CONFIGURED ====="
-
       # ============================================================
       # VERIFY AKS CONNECTION
       # ============================================================
@@ -171,18 +143,12 @@ jobs:
         shell: bash
         run: |
           echo "===== AKS CONTEXT ====="
-
           kubectl config current-context
-
           echo "===== AKS NAMESPACE ====="
-
           kubectl get namespace "$AKS_NAMESPACE"
-
           echo "===== CURRENT WORKLOADS ====="
-
           kubectl get pods \
             -n "$AKS_NAMESPACE"
-
       # ============================================================
       # DEPLOY KUBERNETES
       # ============================================================
@@ -190,11 +156,9 @@ jobs:
         shell: bash
         run: |
           echo "===== DEPLOYING KUBERNETES RESOURCES ====="
-
           kubectl apply \
             -k deploy/kubernetes \
             -n "$AKS_NAMESPACE"
-
       # ============================================================
       # UPDATE IMAGE
       # ============================================================
@@ -202,15 +166,12 @@ jobs:
         shell: bash
         run: |
           FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-
           echo "===== UPDATING DEPLOYMENT IMAGE ====="
           echo "Image: ${FULL_IMAGE}"
-
           kubectl set image \
             deployment/rag-application-demo1 \
             rag-application-demo1="${FULL_IMAGE}" \
             -n "$AKS_NAMESPACE"
-
       # ============================================================
       # WAIT FOR ROLLOUT
       # ============================================================
@@ -218,12 +179,10 @@ jobs:
         shell: bash
         run: |
           echo "===== WAITING FOR ROLLOUT ====="
-
           kubectl rollout status \
             deployment/rag-application-demo1 \
             -n "$AKS_NAMESPACE" \
             --timeout=180s
-
       # ============================================================
       # VERIFY DEPLOYMENT
       # ============================================================
@@ -231,59 +190,51 @@ jobs:
         shell: bash
         run: |
           echo "===== DEPLOYMENT ====="
-
           kubectl get deployment \
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
-
           echo "===== PODS ====="
-
           kubectl get pods \
             -n "$AKS_NAMESPACE" \
             -l app.kubernetes.io/name=rag-application-demo1 \
             -o wide
-
           echo "===== SERVICE ====="
-
           kubectl get service \
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
-
           echo "===== HPA ====="
-
           kubectl get hpa \
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
-
           echo "===== INGRESS ====="
-
           kubectl get ingress \
             rag-application-demo1 \
             -n "$AKS_NAMESPACE"
-
       # ============================================================
       # HEALTH CHECK
       # ============================================================
       - name: Health Check
         shell: bash
         run: |
-          POD=$(kubectl get pods \
-            -n "$AKS_NAMESPACE" \
-            -l app.kubernetes.io/name=rag-application-demo1 \
-            -o jsonpath='{.items[0].metadata.name}')
-
           echo "===== HEALTH CHECK ====="
-          echo "Testing pod: ${POD}"
 
-          kubectl exec \
-            -n "$AKS_NAMESPACE" \
-            "$POD" \
-            -- python -c \
-            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
+          for i in {1..30}; do
+            POD=$(kubectl get pods               -n "$AKS_NAMESPACE"               -l app.kubernetes.io/name="$IMAGE_NAME"               --field-selector=status.phase=Running               -o jsonpath='{.items[?(@.status.containerStatuses[0].ready==true)].metadata.name}'               | awk '{print $1}')
 
-      # ============================================================
-      # READINESS CHECK
-      # ============================================================
+            if [ -n "$POD" ]; then
+              echo "Testing pod: $POD"
+              kubectl exec -n "$AKS_NAMESPACE" "$POD" --                 python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10).read().decode())"
+              exit 0
+            fi
+
+            echo "Waiting for a Running + Ready pod..."
+            sleep 5
+          done
+
+          echo "ERROR: No Running + Ready pod found"
+          kubectl get pods -n "$AKS_NAMESPACE" -o wide
+          exit 1
+
       - name: Readiness Check
         shell: bash
         run: |
@@ -291,16 +242,13 @@ jobs:
             -n "$AKS_NAMESPACE" \
             -l app.kubernetes.io/name=rag-application-demo1 \
             -o jsonpath='{.items[0].metadata.name}')
-
           echo "===== READINESS CHECK ====="
           echo "Testing pod: ${POD}"
-
           kubectl exec \
             -n "$AKS_NAMESPACE" \
             "$POD" \
             -- python -c \
             "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/ready').read().decode())"
-
       # ============================================================
       # FINAL STATUS
       # ============================================================
