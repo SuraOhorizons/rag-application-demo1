@@ -1,8 +1,8 @@
 import json
 
-from backstage import get_component
-from argocd import fetch_application, normalize_application
-from kubernetes import fetch_deployment, fetch_pods, normalize_runtime
+from .backstage import get_component
+from .argocd import fetch_application, normalize_application
+from .kubernetes import fetch_deployment, fetch_pods, normalize_runtime
 
 
 COMPONENT = "rag-application-demo1"
