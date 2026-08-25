@@ -216,20 +216,25 @@ jobs:
       - name: Health Check
         shell: bash
         run: |
-          POD=$(kubectl get pods \
-            -n "$AKS_NAMESPACE" \
-            -l app.kubernetes.io/name=rag-application-demo1 \
-            -o jsonpath='{.items[0].metadata.name}')
           echo "===== HEALTH CHECK ====="
-          echo "Testing pod: ${POD}"
-          kubectl exec \
-            -n "$AKS_NAMESPACE" \
-            "$POD" \
-            -- python -c \
-            "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health').read().decode())"
-      # ============================================================
-      # READINESS CHECK
-      # ============================================================
+
+          for i in {1..30}; do
+            POD=$(kubectl get pods               -n "$AKS_NAMESPACE"               -l app.kubernetes.io/name="$IMAGE_NAME"               --field-selector=status.phase=Running               -o jsonpath='{.items[?(@.status.containerStatuses[0].ready==true)].metadata.name}'               | awk '{print $1}')
+
+            if [ -n "$POD" ]; then
+              echo "Testing pod: $POD"
+              kubectl exec -n "$AKS_NAMESPACE" "$POD" --                 python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=10).read().decode())"
+              exit 0
+            fi
+
+            echo "Waiting for a Running + Ready pod..."
+            sleep 5
+          done
+
+          echo "ERROR: No Running + Ready pod found"
+          kubectl get pods -n "$AKS_NAMESPACE" -o wide
+          exit 1
+
       - name: Readiness Check
         shell: bash
         run: |
