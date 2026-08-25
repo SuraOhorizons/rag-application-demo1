@@ -1,26 +1,34 @@
+"""ArgoCD operational context collector."""
+
+from __future__ import annotations
+
 import json
 import ssl
 import urllib.request
 from typing import Any
 
 
-APPLICATION = "rag-application"
+API_SERVER = "https://kubernetes.default.svc"
+
+TOKEN_PATH = (
+    "/var/run/secrets/kubernetes.io/serviceaccount/token"
+)
+
+CA_PATH = (
+    "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+)
+
 NAMESPACE = "argocd"
+APPLICATION = "rag-application"
 
 
-def fetch_application() -> dict[str, Any]:
-    token = open(
-        "/var/run/secrets/kubernetes.io/serviceaccount/token"
-    ).read().strip()
+def kubernetes_get(path: str) -> dict[str, Any]:
+    """Read a Kubernetes API resource using the pod ServiceAccount."""
 
-    url = (
-        "https://kubernetes.default.svc"
-        f"/apis/argoproj.io/v1alpha1"
-        f"/namespaces/{NAMESPACE}/applications/{APPLICATION}"
-    )
+    token = open(TOKEN_PATH).read().strip()
 
     request = urllib.request.Request(
-        url,
+        f"{API_SERVER}{path}",
         headers={
             "Accept": "application/json",
             "Authorization": f"Bearer {token}",
@@ -28,7 +36,7 @@ def fetch_application() -> dict[str, Any]:
     )
 
     context = ssl.create_default_context(
-        cafile="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+        cafile=CA_PATH
     )
 
     with urllib.request.urlopen(
@@ -36,10 +44,38 @@ def fetch_application() -> dict[str, Any]:
         context=context,
         timeout=10,
     ) as response:
-        return json.loads(response.read().decode())
+        return json.loads(
+            response.read().decode()
+        )
 
 
-def normalize_application(app: dict[str, Any]) -> dict[str, Any]:
+def fetch_applications() -> list[dict[str, Any]]:
+    """Fetch all ArgoCD Applications."""
+
+    data = kubernetes_get(
+        f"/apis/argoproj.io/v1alpha1"
+        f"/namespaces/{NAMESPACE}/applications"
+    )
+
+    return data.get("items", [])
+
+
+def fetch_application(
+    name: str = APPLICATION,
+) -> dict[str, Any]:
+    """Fetch a single ArgoCD Application."""
+
+    return kubernetes_get(
+        f"/apis/argoproj.io/v1alpha1"
+        f"/namespaces/{NAMESPACE}/applications/{name}"
+    )
+
+
+def normalize_application(
+    app: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize an ArgoCD Application."""
+
     metadata = app.get("metadata", {})
     spec = app.get("spec", {})
     status = app.get("status", {})
@@ -47,24 +83,46 @@ def normalize_application(app: dict[str, Any]) -> dict[str, Any]:
     source = spec.get("source", {})
     destination = spec.get("destination", {})
 
+    sync = status.get("sync", {})
+    health = status.get("health", {})
+
     return {
-        "id": f"argocd:application:{metadata.get('name')}",
+        "id": (
+            f"argocd:application:"
+            f"{metadata.get('name')}"
+        ),
         "source": "argocd",
         "application": metadata.get("name"),
         "project": spec.get("project"),
         "repository": source.get("repoURL"),
         "path": source.get("path"),
         "revision": source.get("targetRevision"),
-        "resolved_revision": status.get("sync", {}).get("revision"),
+        "resolved_revision": sync.get("revision"),
         "cluster": destination.get("server"),
         "namespace": destination.get("namespace"),
-        "sync_status": status.get("sync", {}).get("status"),
-        "health_status": status.get("health", {}).get("status"),
+        "sync_status": sync.get("status"),
+        "health_status": health.get("status"),
     }
 
 
-if __name__ == "__main__":
-    application = fetch_application()
-    document = normalize_application(application)
+def collect_applications() -> list[dict[str, Any]]:
+    """Fetch and normalize all ArgoCD Applications."""
 
-    print(json.dumps(document, indent=2, ensure_ascii=False))
+    applications = fetch_applications()
+
+    return [
+        normalize_application(application)
+        for application in applications
+    ]
+
+
+if __name__ == "__main__":
+    applications = collect_applications()
+
+    print(
+        json.dumps(
+            applications,
+            indent=2,
+            ensure_ascii=False,
+        )
+    )
