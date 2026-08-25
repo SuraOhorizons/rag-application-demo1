@@ -313,14 +313,8 @@ def index_documents(
     failed = 0
 
     for item in result:
-        key = item.get(
-            "key"
-        )
-
-        success = item.get(
-            "succeeded",
-            False,
-        )
+        key = item.key
+        success = item.succeeded
 
         if success:
             succeeded += 1
