@@ -7,6 +7,11 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get", "list"]
+
   - apiGroups: [""]
     resources: ["pods", "services"]
+    verbs: ["get", "list"]
+
+  - apiGroups: ["argoproj.io"]
+    resources: ["applications"]
     verbs: ["get", "list"]
