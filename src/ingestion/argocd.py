@@ -1,5 +1,6 @@
 import json
-import subprocess
+import ssl
+import urllib.request
 from typing import Any
 
 
@@ -8,23 +9,34 @@ NAMESPACE = "argocd"
 
 
 def fetch_application() -> dict[str, Any]:
-    result = subprocess.run(
-        [
-            "kubectl",
-            "-n",
-            NAMESPACE,
-            "get",
-            "applications.argoproj.io",
-            APPLICATION,
-            "-o",
-            "json",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
+    token = open(
+        "/var/run/secrets/kubernetes.io/serviceaccount/token"
+    ).read().strip()
+
+    url = (
+        "https://kubernetes.default.svc"
+        f"/apis/argoproj.io/v1alpha1"
+        f"/namespaces/{NAMESPACE}/applications/{APPLICATION}"
     )
 
-    return json.loads(result.stdout)
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+
+    context = ssl.create_default_context(
+        cafile="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+    )
+
+    with urllib.request.urlopen(
+        request,
+        context=context,
+        timeout=10,
+    ) as response:
+        return json.loads(response.read().decode())
 
 
 def normalize_application(app: dict[str, Any]) -> dict[str, Any]:
