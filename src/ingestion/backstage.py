@@ -1,3 +1,7 @@
+"""Backstage operational context collector."""
+
+from __future__ import annotations
+
 import json
 import urllib.request
 from typing import Any
@@ -7,6 +11,8 @@ BACKSTAGE_URL = "https://backstage.nttdatacolombia.com"
 
 
 def fetch_entities() -> list[dict[str, Any]]:
+    """Fetch all Backstage catalog entities."""
+
     url = f"{BACKSTAGE_URL}/api/catalog/entities"
 
     request = urllib.request.Request(
@@ -14,18 +20,41 @@ def fetch_entities() -> list[dict[str, Any]]:
         headers={"Accept": "application/json"},
     )
 
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read().decode())
+    with urllib.request.urlopen(
+        request,
+        timeout=30,
+    ) as response:
+        return json.loads(
+            response.read().decode()
+        )
 
 
-def normalize_component(entity: dict[str, Any]) -> dict[str, Any]:
+def normalize_entity(
+    entity: dict[str, Any],
+) -> dict[str, Any]:
+    """Normalize a Backstage catalog entity."""
+
     metadata = entity.get("metadata", {})
     spec = entity.get("spec", {})
 
+    annotations = metadata.get(
+        "annotations",
+        {},
+    )
+
     return {
-        "id": f"backstage:component:{metadata.get('namespace', 'default')}/{metadata.get('name')}",
+        "id": (
+            f"backstage:"
+            f"{metadata.get('namespace', 'default')}:"
+            f"{entity.get('kind', 'Unknown')}:"
+            f"{metadata.get('name')}"
+        ),
         "source": "backstage",
-        "kind": "Component",
+        "kind": entity.get("kind"),
+        "namespace": metadata.get(
+            "namespace",
+            "default",
+        ),
         "name": metadata.get("name"),
         "description": metadata.get("description"),
         "type": spec.get("type"),
@@ -33,34 +62,54 @@ def normalize_component(entity: dict[str, Any]) -> dict[str, Any]:
         "owner": spec.get("owner"),
         "system": spec.get("system"),
         "tags": metadata.get("tags", []),
-        "repository": metadata.get("annotations", {}).get(
+        "repository": annotations.get(
             "github.com/project-slug"
         ),
-        "argocd_app": metadata.get("annotations", {}).get(
+        "argocd_app": annotations.get(
             "argocd/app-name"
         ),
-        "depends_on": spec.get("dependsOn", []),
-        "provides_apis": spec.get("providesApis", []),
+        "depends_on": spec.get(
+            "dependsOn",
+            [],
+        ),
+        "provides_apis": spec.get(
+            "providesApis",
+            [],
+        ),
     }
 
 
-def get_component(name: str) -> dict[str, Any] | None:
-    entities = fetch_entities()
+def collect_entities() -> list[dict[str, Any]]:
+    """Fetch and normalize all Backstage entities."""
 
-    for entity in entities:
+    return [
+        normalize_entity(entity)
+        for entity in fetch_entities()
+    ]
+
+
+def get_component(
+    name: str,
+) -> dict[str, Any] | None:
+    """Get a specific Backstage Component."""
+
+    for entity in collect_entities():
         if (
             entity.get("kind") == "Component"
-            and entity.get("metadata", {}).get("name") == name
+            and entity.get("name") == name
         ):
-            return normalize_component(entity)
+            return entity
 
     return None
 
 
 if __name__ == "__main__":
-    component = get_component("rag-application-demo1")
+    entities = collect_entities()
 
-    if component is None:
-        raise SystemExit("Component not found in Backstage")
-
-    print(json.dumps(component, indent=2, ensure_ascii=False))
+    print(
+        json.dumps(
+            entities,
+            indent=2,
+            ensure_ascii=False,
+        )
+    )

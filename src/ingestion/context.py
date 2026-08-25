@@ -1,34 +1,64 @@
+"""Build operational context for the RAG index."""
+
+from __future__ import annotations
+
 import json
 
-from .backstage import get_component
-from .argocd import fetch_application, normalize_application
-from .kubernetes import fetch_deployment, fetch_pods, normalize_runtime
+from .argocd import collect_applications
+from .backstage import collect_entities, get_component
+from .kubernetes import (
+    collect_cluster_context,
+    fetch_deployment,
+    fetch_pods,
+    normalize_runtime,
+)
 
 
 COMPONENT = "rag-application-demo1"
 
 
 def build_context() -> dict:
-    backstage = get_component(COMPONENT)
+    """Build global and application-specific context."""
 
-    if backstage is None:
+    backstage_entities = collect_entities()
+
+    backstage_component = get_component(
+        COMPONENT
+    )
+
+    if backstage_component is None:
         raise RuntimeError(
             f"Component '{COMPONENT}' not found in Backstage"
         )
 
-    argocd = normalize_application(fetch_application())
+    argocd_applications = collect_applications()
 
     deployment = fetch_deployment()
     pods = fetch_pods()
 
-    kubernetes = normalize_runtime(deployment, pods)
+    rag_runtime = normalize_runtime(
+        deployment,
+        pods,
+    )
+
+    kubernetes_cluster = (
+        collect_cluster_context()
+    )
 
     return {
         "service": COMPONENT,
         "sources": {
-            "backstage": backstage,
-            "argocd": argocd,
-            "kubernetes": kubernetes,
+            "backstage": {
+                "entities": backstage_entities,
+                "component": backstage_component,
+            },
+            "argocd": {
+                "applications": argocd_applications,
+            },
+            "kubernetes": {
+                "cluster": kubernetes_cluster,
+                "service_runtime": rag_runtime,
+            },
         },
     }
 
