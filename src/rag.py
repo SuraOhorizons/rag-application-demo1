@@ -492,6 +492,14 @@ class RAGService:
                 max_completion_tokens=1000,
             )
 
+            logger.info(
+                "LLM finish_reason=%s content=%r refusal=%r usage=%s",
+                response.choices[0].finish_reason,
+                response.choices[0].message.content,
+                response.choices[0].message.refusal,
+                response.usage,
+            )
+
             return response.choices[0].message.content
 
         except Exception:
