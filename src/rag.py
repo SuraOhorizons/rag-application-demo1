@@ -24,10 +24,14 @@ class RAGService:
         search_index: str,
     ):
         """Initialize RAG service."""
+        credential = DefaultAzureCredential()
+
         self.openai_client = AzureOpenAI(
             azure_endpoint=openai_endpoint,
-            api_key=openai_key,
-            api_version="2024-02-15-preview",
+            api_version="2024-10-21",
+            azure_ad_token_provider=lambda: credential.get_token(
+                "https://cognitiveservices.azure.com/.default"
+            ).token,
         )
 
         self.openai_deployment = openai_deployment
