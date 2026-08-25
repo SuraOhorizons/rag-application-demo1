@@ -33,7 +33,7 @@ spec:
       containers:
         - name: rag-application-demo1
 
-          image: crsuradev.azurecr.io/rag-application-demo1:v0.3.10
+          image: crsuradev.azurecr.io/rag-application-demo1:v0.3.11
           imagePullPolicy: IfNotPresent
 
           env:
