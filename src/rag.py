@@ -479,11 +479,8 @@ class RAGService:
             },
         ]
 
-        for message in history[-4:]:
-            messages.insert(
-                -1,
-                message,
-            )
+        # Conversation history temporarily disabled during RAG validation.
+        # Retrieval and answer generation must be deterministic.
 
         llm_start = time.perf_counter()
         LLM_REQUESTS.inc()
