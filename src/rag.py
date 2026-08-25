@@ -257,6 +257,11 @@ class RAGService:
         query_lower = query.lower()
 
         source_filter = None
+        resource_type = None
+
+        # ---------------------------------------------------------
+        # Source detection
+        # ---------------------------------------------------------
 
         if "argocd" in query_lower:
             source_filter = "argocd"
@@ -266,6 +271,40 @@ class RAGService:
 
         elif "kubernetes" in query_lower:
             source_filter = "kubernetes"
+
+        # ---------------------------------------------------------
+        # Resource type detection
+        # ---------------------------------------------------------
+
+        if source_filter == "kubernetes":
+            if any(term in query_lower for term in (
+                "servicio",
+                "servicios",
+                "service",
+                "services",
+            )):
+                resource_type = "service"
+
+            elif any(term in query_lower for term in (
+                "deployment",
+                "deployments",
+                "despliegue",
+                "despliegues",
+            )):
+                resource_type = "deployment"
+
+            elif any(term in query_lower for term in (
+                "pod",
+                "pods",
+            )):
+                resource_type = "pod"
+
+            elif any(term in query_lower for term in (
+                "namespace",
+                "namespaces",
+                "espacio de nombres",
+            )):
+                resource_type = "namespace"
 
         inventory_terms = (
             "qué aplicaciones",
@@ -277,6 +316,15 @@ class RAGService:
             "inventario",
             "lista",
             "listar",
+            "qué servicios",
+            "que servicios",
+            "cuáles servicios",
+            "cuales servicios",
+            "todos los servicios",
+            "qué deployments",
+            "que deployments",
+            "qué pods",
+            "que pods",
         )
 
         is_inventory_query = any(
@@ -284,8 +332,8 @@ class RAGService:
             for term in inventory_terms
         )
 
-        if is_inventory_query and source_filter:
-            top_k = 50
+        if is_inventory_query:
+            top_k = max(top_k, 50)
         else:
             top_k = max(top_k, 10)
 
@@ -321,6 +369,33 @@ class RAGService:
 
             results = list(results)
 
+            # -----------------------------------------------------
+            # Resource-level filtering
+            #
+            # resource_type is stored inside the serialized JSON
+            # content, therefore filtering is performed locally.
+            # -----------------------------------------------------
+
+            if resource_type:
+                filtered_results = []
+
+                for result in results:
+                    content = result.get("content", "")
+
+                    try:
+                        document = json.loads(content)
+                    except (json.JSONDecodeError, TypeError):
+                        document = {}
+
+                    if (
+                        document.get("resource_type")
+                        == resource_type
+                    ):
+                        filtered_results.append(result)
+
+                results = filtered_results
+
+            RETRIEVAL_RESULTS.set(len(results))
             RETRIEVAL_DOCUMENTS.inc(len(results))
 
             return results
