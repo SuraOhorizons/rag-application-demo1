@@ -125,7 +125,42 @@ class RAGService:
         query: str,
         top_k: int = 5,
     ) -> list:
-        """Search for relevant documents."""
+        """Search for relevant operational documents."""
+
+        query_lower = query.lower()
+
+        source_filter = None
+
+        if "argocd" in query_lower:
+            source_filter = "argocd"
+
+        elif "backstage" in query_lower:
+            source_filter = "backstage"
+
+        elif "kubernetes" in query_lower:
+            source_filter = "kubernetes"
+
+        inventory_terms = (
+            "qué aplicaciones",
+            "que aplicaciones",
+            "cuáles aplicaciones",
+            "cuales aplicaciones",
+            "todas las aplicaciones",
+            "cada una",
+            "inventario",
+            "lista",
+            "listar",
+        )
+
+        is_inventory_query = any(
+            term in query_lower
+            for term in inventory_terms
+        )
+
+        if is_inventory_query and source_filter:
+            top_k = 50
+        else:
+            top_k = max(top_k, 10)
 
         vector_query = VectorizedQuery(
             vector=embedding,
@@ -133,9 +168,17 @@ class RAGService:
             fields="content_vector",
         )
 
+        filter_expression = None
+
+        if source_filter:
+            filter_expression = (
+                f"source eq '{source_filter}'"
+            )
+
         results = self.search_client.search(
             search_text=query,
             vector_queries=[vector_query],
+            filter=filter_expression,
             select=[
                 "id",
                 "title",
@@ -184,13 +227,26 @@ class RAGService:
         """Generate response using Azure OpenAI."""
 
         system_prompt = (
-            "You are a helpful assistant that answers "
-            "questions based on the provided context. "
-            "Always cite your sources using [1], [2], etc. "
-            "when referencing information from the context. "
-            "If you cannot find the answer in the context, "
-            "say so clearly. "
-            "Be concise and accurate."
+            "You are an operational assistant for the Open Horizons "
+            "engineering platform. "
+            "Answer only from the provided context. "
+            "Do not invent or assume information. "
+            "Always cite factual statements using [1], [2], etc. "
+            "corresponding to the context documents. "
+            "\n\n"
+            "When the user asks for a list, inventory, or status of "
+            "multiple resources, enumerate all relevant resources "
+            "available in the context. "
+            "Do not return only one example when multiple matching "
+            "resources are present. "
+            "\n\n"
+            "When information comes from different operational sources "
+            "such as Backstage, ArgoCD, and Kubernetes, explain the "
+            "relationship between them when relevant. "
+            "\n\n"
+            "If the context does not contain enough information to "
+            "answer the question, say so clearly. "
+            "Be concise, precise, and operationally useful."
         )
 
         messages = [
