@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from azure.core.credentials import AzureKeyCredential
+from azure.identity import DefaultAzureCredential
 from azure.search.documents import SearchClient
 from azure.search.documents.models import VectorizedQuery
 from openai import AzureOpenAI
@@ -35,7 +35,7 @@ class RAGService:
         self.search_client = SearchClient(
             endpoint=search_endpoint,
             index_name=search_index,
-            credential=AzureKeyCredential(search_key),
+            credential=DefaultAzureCredential(),
         )
 
         self.conversations: dict = {}

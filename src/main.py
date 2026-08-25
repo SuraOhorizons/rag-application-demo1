@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from starlette.responses import Response
 from azure.identity import DefaultAzureCredential
 from openai import AzureOpenAI
+from src.rag import RAGService
 import os
 
 
@@ -62,6 +63,21 @@ openai_client = AzureOpenAI(
 )
 
 OPENAI_DEPLOYMENT = os.environ["AZURE_OPENAI_DEPLOYMENT"]
+
+SEARCH_ENDPOINT = os.environ["AZURE_SEARCH_ENDPOINT"]
+SEARCH_INDEX = os.environ.get(
+    "AZURE_SEARCH_INDEX",
+    "documents",
+)
+
+rag_service = RAGService(
+    openai_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
+    openai_key="",
+    openai_deployment=OPENAI_DEPLOYMENT,
+    search_endpoint=SEARCH_ENDPOINT,
+    search_key="",
+    search_index=SEARCH_INDEX,
+)
 
 
 @asynccontextmanager
@@ -168,24 +184,16 @@ async def chat(request: ChatRequest):
     CHAT_REQUESTS.inc()
 
     with CHAT_LATENCY.time():
-        conversation_id = request.conversation_id or str(uuid.uuid4())
-
         try:
-            response = openai_client.chat.completions.create(
-                model=OPENAI_DEPLOYMENT,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": request.query,
-                    },
-                ],
-                max_completion_tokens=1000,
+            result = await rag_service.chat(
+                query=request.query,
+                conversation_id=request.conversation_id,
             )
 
             return ChatResponse(
-                answer=response.choices[0].message.content or "",
-                sources=[],
-                conversation_id=conversation_id,
+                answer=result["answer"],
+                sources=result["sources"],
+                conversation_id=result["conversation_id"],
             )
 
         except Exception as exc:
