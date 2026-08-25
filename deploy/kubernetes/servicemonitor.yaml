@@ -1,0 +1,25 @@
+apiVersion: azmonitoring.coreos.com/v1
+kind: ServiceMonitor
+
+metadata:
+  name: azmon-rag-application
+  namespace: default
+
+spec:
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      port: http
+
+  labelLimit: 63
+  labelNameLengthLimit: 511
+  labelValueLengthLimit: 1023
+
+  namespaceSelector:
+    matchNames:
+      - default
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rag-application-demo1
+      app.kubernetes.io/part-of: open-horizons
